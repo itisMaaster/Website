@@ -19,7 +19,6 @@
     box-shadow:0 10px 40px rgba(0,0,0,.45);
 }
 
-
 *{
     margin:0;
     padding:0;
@@ -37,7 +36,10 @@ body{
     overflow-x:hidden;
 }
 
-/* SPACE BACKGROUND */
+
+/* =========================================
+   SPACE BACKGROUND
+========================================= */
 
 .space{
     position:fixed;
@@ -45,6 +47,7 @@ body{
     overflow:hidden;
     pointer-events:none;
     z-index:-20;
+
     background:
         radial-gradient(
             ellipse at 50% 45%,
@@ -54,7 +57,10 @@ body{
         );
 }
 
-/* NEBULAS */
+
+/* =========================================
+   NEBULAS
+========================================= */
 
 .nebula{
     position:absolute;
@@ -69,35 +75,45 @@ body{
 .nebula.one{
     left:15%;
     top:30%;
-    background:radial-gradient(
-        circle,
-        #314caa,
-        transparent 70%
-    );
+
+    background:
+        radial-gradient(
+            circle,
+            #314caa,
+            transparent 70%
+        );
 }
 
 .nebula.two{
     left:80%;
     top:70%;
-    background:radial-gradient(
-        circle,
-        #663c9b,
-        transparent 70%
-    );
+
+    background:
+        radial-gradient(
+            circle,
+            #663c9b,
+            transparent 70%
+        );
 }
 
 .nebula.three{
     left:55%;
     top:10%;
-    background:radial-gradient(
-        circle,
-        #244b77,
-        transparent 70%
-    );
+
+    background:
+        radial-gradient(
+            circle,
+            #244b77,
+            transparent 70%
+        );
+
     opacity:.08;
 }
 
-/* STAR LAYERS */
+
+/* =========================================
+   STAR LAYERS
+========================================= */
 
 .star-layer{
     position:absolute;
@@ -111,12 +127,15 @@ body{
     position:absolute;
     border-radius:50%;
     background:white;
+
     animation:
         twinkle
         var(--time)
         ease-in-out
         infinite;
+
     animation-delay:var(--delay);
+
     opacity:var(--opacity);
 
     box-shadow:
@@ -125,6 +144,7 @@ body{
 }
 
 @keyframes twinkle{
+
     0%,100%{
         opacity:calc(var(--opacity)*.65);
     }
@@ -134,7 +154,10 @@ body{
     }
 }
 
-/* GALAXIES */
+
+/* =========================================
+   GALAXIES
+========================================= */
 
 .galaxy{
     position:absolute;
@@ -152,10 +175,14 @@ body{
 
     filter:blur(1px);
     opacity:.15;
+
     transform:rotate(-25deg);
 }
 
-/* PLANETS */
+
+/* =========================================
+   PLANETS
+========================================= */
 
 .planet{
     position:absolute;
@@ -168,12 +195,17 @@ body{
         0 0 35px rgba(120,150,255,.08);
 }
 
-/* MOUSE GLOW */
+
+/* =========================================
+   MOUSE GLOW
+========================================= */
 
 .mouse-glow{
     position:fixed;
+
     width:420px;
     height:420px;
+
     border-radius:50%;
     pointer-events:none;
 
@@ -186,6 +218,7 @@ body{
         );
 
     transform:translate(-50%,-50%);
+
     z-index:-5;
 
     transition:
@@ -193,13 +226,16 @@ body{
         top .12s ease-out;
 }
 
-/* SHOOTING STARS */
+
+/* =========================================
+   SHOOTING STARS
+========================================= */
 
 .shooting-star{
     position:absolute;
 
-    width:2px;
-    height:2px;
+    width:3px;
+    height:3px;
 
     border-radius:50%;
 
@@ -207,16 +243,28 @@ body{
 
     opacity:0;
 
+    /*
+        Glow around the actual star.
+        The star itself is the moving object.
+    */
+
     box-shadow:
-        0 0 4px rgba(255,255,255,.8),
-        0 0 8px rgba(180,210,255,.45);
+        0 0 4px rgba(255,255,255,.9),
+        0 0 9px rgba(180,210,255,.5);
 }
 
-/*
-    The tail is rotated independently.
 
-    This means it always points exactly
-    opposite to the direction of movement.
+/*
+    IMPORTANT:
+
+    The tail starts at the CENTER of the star
+    and extends in the opposite direction
+    of movement.
+
+    Because the transform-origin is LEFT,
+    the tail stays attached to the star.
+
+    It therefore cannot move ahead of the star.
 */
 
 .shooting-star::after{
@@ -224,28 +272,36 @@ body{
 
     position:absolute;
 
-    width:var(--trail);
-    height:1px;
-
     left:50%;
     top:50%;
+
+    width:var(--trail);
+    height:1px;
 
     transform:
         translateY(-50%)
         rotate(var(--tail-angle));
 
-    transform-origin:right center;
+    transform-origin:left center;
 
     background:
         linear-gradient(
             to right,
-            transparent,
-            rgba(180,210,255,.18),
-            rgba(255,255,255,.65)
+            rgba(255,255,255,.65),
+            rgba(180,210,255,.28),
+            transparent
         );
 
-    filter:blur(.3px);
+    filter:blur(.35px);
+
+    opacity:.9;
 }
+
+
+/*
+    Only the STAR itself moves.
+    The tail is attached to it.
+*/
 
 .shooting-star.fly{
     animation:
@@ -254,6 +310,7 @@ body{
         cubic-bezier(.15,.65,.25,1)
         forwards;
 }
+
 
 @keyframes meteor{
 
@@ -265,12 +322,20 @@ body{
             scale(.7);
     }
 
-    12%{
+    10%{
+        opacity:0;
+    }
+
+    14%{
         opacity:var(--brightness);
     }
 
-    75%{
+    70%{
         opacity:var(--brightness);
+    }
+
+    88%{
+        opacity:calc(var(--brightness) * .65);
     }
 
     100%{
@@ -285,7 +350,10 @@ body{
     }
 }
 
-/* SECTIONS */
+
+/* =========================================
+   SECTIONS
+========================================= */
 
 section{
     min-height:100vh;
@@ -329,7 +397,10 @@ section{
         rgba(255,255,255,.42);
 }
 
-/* SCROLL SECTIONS */
+
+/* =========================================
+   SCROLL SECTIONS
+========================================= */
 
 .scroll-section{
     height:130vh;
@@ -374,7 +445,10 @@ section{
         rgba(255,255,255,.4);
 }
 
-/* FINAL */
+
+/* =========================================
+   FINAL
+========================================= */
 
 .final{
     height:100vh;
@@ -386,7 +460,10 @@ section{
         clamp(45px,8vw,100px);
 }
 
-/* SCROLL INDICATOR */
+
+/* =========================================
+   SCROLL INDICATOR
+========================================= */
 
 .scroll-indicator{
     position:absolute;
@@ -413,12 +490,17 @@ section{
         transform:translateY(10px);
     }
 }
+
 </style>
 </head>
 
+
 <body>
 
-<!-- SPACE -->
+
+<!-- =========================================
+     SPACE
+========================================= -->
 
 <div class="space">
 
@@ -437,12 +519,17 @@ section{
 
 </div>
 
-<!-- MOUSE -->
+
+<!-- =========================================
+     MOUSE
+========================================= -->
 
 <div class="mouse-glow" id="mouseGlow"></div>
 
 
-<!-- HERO -->
+<!-- =========================================
+     HERO
+========================================= -->
 
 <section class="hero">
 
@@ -454,7 +541,6 @@ section{
             this is space
         </p>
 
-
     </div>
 
     <div class="scroll-indicator">
@@ -464,7 +550,9 @@ section{
 </section>
 
 
-<!-- SECTION 1 -->
+<!-- =========================================
+     SECTION 1
+========================================= -->
 
 <section class="scroll-section">
 
@@ -481,7 +569,9 @@ section{
 </section>
 
 
-<!-- SECTION 2 -->
+<!-- =========================================
+     SECTION 2
+========================================= -->
 
 <section class="scroll-section">
 
@@ -497,7 +587,9 @@ section{
 </section>
 
 
-<!-- FINAL -->
+<!-- =========================================
+     FINAL
+========================================= -->
 
 <section class="final">
 
@@ -515,7 +607,13 @@ section{
 
 </section>
 
+
+<!-- =========================================
+     SPOTIFY
+========================================= -->
+
 <div class="spotify-player">
+
     <iframe
         data-testid="embed-iframe"
         src="https://open.spotify.com/embed/playlist/1XTxduXz5nIi93xKnSuT33?utm_source=generator&si=e97fb2283dc24a86"
@@ -526,9 +624,12 @@ section{
         allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
         loading="lazy">
     </iframe>
+
 </div>
 
+
 <script>
+
 
 /* =========================================
    STARS
@@ -549,6 +650,7 @@ function createStars(
             document.createElement("div");
 
         star.className = "star";
+
 
         star.style.left =
             Math.random() * 100 + "%";
@@ -602,7 +704,9 @@ function createStars(
 
 
         container.appendChild(star);
+
     }
+
 }
 
 
@@ -615,6 +719,7 @@ createStars(
     .45
 );
 
+
 createStars(
     document.getElementById("middleStars"),
     220,
@@ -623,6 +728,7 @@ createStars(
     .2,
     .7
 );
+
 
 createStars(
     document.getElementById("nearStars"),
@@ -634,6 +740,7 @@ createStars(
 );
 
 
+
 /* =========================================
    GALAXIES
 ========================================= */
@@ -643,12 +750,15 @@ function createGalaxies(){
     const container =
         document.getElementById("galaxies");
 
+
     for(let i = 0; i < 7; i++){
 
         const galaxy =
             document.createElement("div");
 
-        galaxy.className = "galaxy";
+        galaxy.className =
+            "galaxy";
+
 
         galaxy.style.left =
             Math.random() * 100 + "%";
@@ -663,10 +773,13 @@ function createGalaxies(){
 
 
         container.appendChild(galaxy);
+
     }
+
 }
 
 createGalaxies();
+
 
 
 /* =========================================
@@ -678,16 +791,19 @@ function createPlanets(){
     const container =
         document.getElementById("planets");
 
+
     for(let i = 0; i < 3; i++){
 
         const planet =
             document.createElement("div");
 
-        planet.className = "planet";
+        planet.className =
+            "planet";
 
 
         const size =
             30 + Math.random() * 80;
+
 
         planet.style.width =
             size + "px";
@@ -718,10 +834,13 @@ function createPlanets(){
 
 
         container.appendChild(planet);
+
     }
+
 }
 
 createPlanets();
+
 
 
 /* =========================================
@@ -737,7 +856,9 @@ function createShootingStar(){
         "shooting-star";
 
 
-    /* Random starting position */
+    /*
+        Random starting position
+    */
 
     const startX =
         Math.random() * 120 - 10;
@@ -753,13 +874,22 @@ function createShootingStar(){
         startY + "%";
 
 
-    /* Direction */
+    /*
+        Random direction
+
+        1  = right
+        -1 = left
+    */
 
     const direction =
-        Math.random() > .5 ? 1 : -1;
+        Math.random() > .5
+            ? 1
+            : -1;
 
 
-    /* Distance */
+    /*
+        Random distance
+    */
 
     const distance =
         180 + Math.random() * 280;
@@ -773,7 +903,10 @@ function createShootingStar(){
         140 + Math.random() * 220;
 
 
-    /* Movement angle */
+    /*
+        Calculate the EXACT direction
+        the shooting star travels.
+    */
 
     const movementAngle =
         Math.atan2(
@@ -783,60 +916,73 @@ function createShootingStar(){
 
 
     /*
-        The tail must point backwards.
+        The tail must ALWAYS be behind.
 
-        So we add 180 degrees to
-        the movement direction.
+        Therefore it points 180 degrees
+        opposite the direction of travel.
     */
 
     const tailAngle =
         movementAngle + 180;
 
 
-    /* Random timing */
+    /*
+        Random duration
+    */
 
     const duration =
         .9 + Math.random() * 1;
 
 
-    /* Random tail length */
+    /*
+        Random tail length
+    */
 
     const trail =
         50 + Math.random() * 90;
 
 
-    /* Subtle brightness */
+    /*
+        Random subtle brightness
+    */
 
     const brightness =
         .35 + Math.random() * .45;
 
 
-    /* CSS variables */
+    /*
+        CSS variables
+    */
 
     star.style.setProperty(
         "--distance-x",
         distanceX + "px"
     );
 
+
     star.style.setProperty(
         "--distance-y",
         distanceY + "px"
     );
+
 
     star.style.setProperty(
         "--duration",
         duration + "s"
     );
 
+
     star.style.setProperty(
         "--trail",
         trail + "px"
     );
 
+
     star.style.setProperty(
         "--brightness",
         brightness
     );
+
 
     star.style.setProperty(
         "--tail-angle",
@@ -844,12 +990,18 @@ function createShootingStar(){
     );
 
 
+    /*
+        Add to page
+    */
+
     document
         .getElementById("shootingStars")
         .appendChild(star);
 
 
-    /* Start animation */
+    /*
+        Start animation
+    */
 
     requestAnimationFrame(() => {
 
@@ -858,14 +1010,18 @@ function createShootingStar(){
     });
 
 
-    /* Remove after animation */
+    /*
+        Remove after animation
+    */
 
     setTimeout(() => {
 
         star.remove();
 
     }, (duration + .2) * 1000);
+
 }
+
 
 
 /* =========================================
@@ -875,12 +1031,16 @@ function createShootingStar(){
 function meteorShower(){
 
     /*
-        Usually one shooting star.
-        Sometimes two.
+        Usually one.
+
+        Sometimes two,
+        but never a whole group.
     */
 
     const amount =
-        Math.random() > .7 ? 2 : 1;
+        Math.random() > .7
+            ? 2
+            : 1;
 
 
     for(let i = 0; i < amount; i++){
@@ -891,10 +1051,13 @@ function meteorShower(){
         );
 
     }
+
 }
 
 
-/* First meteor */
+/*
+    First meteor
+*/
 
 setTimeout(
     meteorShower,
@@ -902,7 +1065,9 @@ setTimeout(
 );
 
 
-/* Random future meteors */
+/*
+    Random future meteors
+*/
 
 function scheduleMeteorShower(){
 
@@ -917,9 +1082,12 @@ function scheduleMeteorShower(){
         scheduleMeteorShower();
 
     }, delay);
+
 }
 
+
 scheduleMeteorShower();
+
 
 
 /* =========================================
@@ -937,11 +1105,13 @@ document.addEventListener(
         mouseGlow.style.left =
             event.clientX + "px";
 
+
         mouseGlow.style.top =
             event.clientY + "px";
 
     }
 );
+
 
 
 /* =========================================
@@ -951,11 +1121,14 @@ document.addEventListener(
 const farStars =
     document.getElementById("farStars");
 
+
 const middleStars =
     document.getElementById("middleStars");
 
+
 const nearStars =
     document.getElementById("nearStars");
+
 
 const hero =
     document.getElementById("heroContent");
@@ -969,7 +1142,9 @@ window.addEventListener(
             window.scrollY;
 
 
-        /* Star parallax */
+        /*
+            Star parallax
+        */
 
         farStars.style.transform =
             `translateY(${scroll * .035}px)`;
@@ -983,7 +1158,9 @@ window.addEventListener(
             `translateY(${scroll * .17}px)`;
 
 
-        /* Hero fade */
+        /*
+            Hero fade
+        */
 
         const fade =
             Math.max(
@@ -1011,6 +1188,7 @@ window.addEventListener(
         passive:true
     }
 );
+
 
 
 /* =========================================
