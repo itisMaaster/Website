@@ -6,6 +6,20 @@
 <title>itsMaaster</title>
 
 <style>
+
+.spotify-player{
+    position:fixed;
+    left:20px;
+    bottom:20px;
+    width:360px;
+    height:80px;
+    z-index:100;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,.45);
+}
+
+
 *{
     margin:0;
     padding:0;
@@ -440,6 +454,7 @@ section{
             this is space
         </p>
 
+
     </div>
 
     <div class="scroll-indicator">
@@ -500,6 +515,18 @@ section{
 
 </section>
 
+<div class="spotify-player">
+    <iframe
+        data-testid="embed-iframe"
+        src="https://open.spotify.com/embed/playlist/1XTxduXz5nIi93xKnSuT33?utm_source=generator&si=e97fb2283dc24a86"
+        width="100%"
+        height="100"
+        frameBorder="0"
+        allowfullscreen=""
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy">
+    </iframe>
+</div>
 
 <script>
 
