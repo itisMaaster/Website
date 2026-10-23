@@ -7,6 +7,39 @@ const NAV = [
   ["Activity", `${BASE}/activity`], ["Status", `${BASE}/status`]
 ];
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+const MAX_BOUNTY_ITEMS = 2304;
+const COMMON_MINECRAFT_ITEMS = [
+  "DIAMOND", "EMERALD", "NETHERITE_INGOT", "GOLD_INGOT", "IRON_INGOT", "COPPER_INGOT", "ANCIENT_DEBRIS",
+  "NETHERITE_SCRAP", "GOLDEN_APPLE", "ENCHANTED_GOLDEN_APPLE", "TOTEM_OF_UNDYING", "ELYTRA", "TRIDENT", "MACE",
+  "NETHER_STAR", "SHULKER_SHELL", "HEART_OF_THE_SEA", "NAUTILUS_SHELL", "ENDER_PEARL", "EXPERIENCE_BOTTLE",
+  "DIAMOND_BLOCK", "EMERALD_BLOCK", "NETHERITE_BLOCK", "GOLD_BLOCK", "IRON_BLOCK", "COPPER_BLOCK",
+  "DIAMOND_SWORD", "DIAMOND_PICKAXE", "NETHERITE_SWORD", "NETHERITE_PICKAXE", "ENDER_CHEST", "SHULKER_BOX",
+  "OBSIDIAN", "CRYING_OBSIDIAN", "WITHER_SKELETON_SKULL", "DRAGON_HEAD", "DRAGON_EGG", "BEACON",
+  "FIREWORK_ROCKET", "EXPERIENCE_BOTTLE", "SLIME_BLOCK", "HONEY_BLOCK", "GUNPOWDER", "BLAZE_ROD", "GHAST_TEAR",
+  "DIAMOND_HELMET", "DIAMOND_CHESTPLATE", "DIAMOND_LEGGINGS", "DIAMOND_BOOTS", "NETHERITE_HELMET",
+  "NETHERITE_CHESTPLATE", "NETHERITE_LEGGINGS", "NETHERITE_BOOTS", "BOOK", "ENCHANTED_BOOK", "SADDLE",
+  "NAME_TAG", "MUSIC_DISC_PIGSTEP", "COAL", "REDSTONE", "LAPIS_LAZULI", "QUARTZ", "AMETHYST_SHARD",
+  "APPLE", "BREAD", "COOKED_BEEF", "GOLDEN_CARROT", "BONE", "STRING", "ARROW", "OAK_LOG", "OAK_PLANKS"
+];
+const materialName = (value) => {
+  const material = String(value || "").replace(/^minecraft:/i, "").trim().toUpperCase();
+  return /^[A-Z][A-Z0-9_]{0,63}$/.test(material) ? material : "";
+};
+const prettyMaterial = (value) => materialName(value).toLowerCase().split("_").map((part) => part ? part[0].toUpperCase() + part.slice(1) : "").join(" ") || "Unknown item";
+function bountyItemMaterial(bounty) {
+  const direct = bounty?.itemMaterial || bounty?.itemType || bounty?.item?.material;
+  if (direct) return materialName(direct);
+  const currency = String(bounty?.currency || "");
+  return currency.toUpperCase().startsWith("ITEM:") ? materialName(currency.slice(5)) : "";
+}
+function bountyRewardText(bounty) {
+  const material = bountyItemMaterial(bounty);
+  const amount = bounty?.itemAmount ?? bounty?.item?.amount ?? bounty?.totalValue ?? bounty?.amount;
+  return material ? `${fmt(amount)} × ${prettyMaterial(material)}` : `${fmt(amount)}${bounty?.currency ? ` ${bounty.currency}` : ""}`;
+}
+function bountyRewardCaption(bounty) {
+  return bountyItemMaterial(bounty) ? "item reward pool" : `${bounty?.currency || "Reward"} reward pool`;
+}
 let routeVersion = 0;
 let toastTimer;
 let restoreSearchCursor = null;
@@ -189,7 +222,7 @@ async function overviewPage(version) {
       <div class="server-meta"><span>Players online</span><strong>${server.onlinePlayers == null || server.maxPlayers == null ? "Unavailable" : `${fmt(server.onlinePlayers)} / ${fmt(server.maxPlayers)}`}</strong></div>
       <div class="server-meta"><span>Last heartbeat</span><strong>${server.lastHeartbeat ? esc(since(server.lastHeartbeat)) : "Unavailable"}</strong></div>
       <div class="address-row"><span class="${addressClass}" id="server-address">${esc(ip)}</span>${server.address ? `<button class="button ghost" data-copy-address="${esc(server.address)}" type="button">Copy address</button>` : ""}</div></aside></div>
-      <section class="section"><div class="stats-grid">${stat("Tracked players", stats.players == null ? "—" : compact(stats.players), "Server records")}${stat("Player kills", stats.playerKills == null ? "—" : compact(stats.playerKills), "PvP · all time")}${stat("Active bounties", stats.activeBounties == null ? "—" : compact(stats.activeBounties), "Confirmed · current")}${stat("Bounty pool", stats.currency && stats.activeBountyValue != null ? `${compact(stats.activeBountyValue)} ${stats.currency}` : "—", stats.currency ? "Across active targets" : "Currency unavailable")}</div></section>
+      <section class="section"><div class="stats-grid">${stat("Tracked players", stats.players == null ? "—" : compact(stats.players), "Server records")}${stat("Player kills", stats.playerKills == null ? "—" : compact(stats.playerKills), "PvP · all time")}${stat("Active bounties", stats.activeBounties == null ? "—" : compact(stats.activeBounties), "Confirmed · current")}${stat("Bounty pool", data.bounties?.length ? (data.bounties[0].itemMaterial ? `${compact(data.bounties[0].itemAmount ?? data.bounties[0].totalValue)} ${prettyMaterial(data.bounties[0].itemMaterial)}` : stats.currency && stats.activeBountyValue != null ? `${compact(stats.activeBountyValue)} ${stats.currency}` : "Active rewards") : stats.currency && stats.activeBountyValue != null ? `${compact(stats.activeBountyValue)} ${stats.currency}` : "—", "Item rewards shown on the bounty board")}</div></section>
       <section class="section">${sectionHead("The Leaders", "All rankings", `${BASE}/leaderboards`)}<div class="bounty-grid leaders-grid">${leaderMarkup}</div></section>
       <section class="section">${sectionHead("Wanted Across the Universe", "Full bounty board", `${BASE}/bounties`)}${data.bounties?.length ? `<div class="bounty-grid">${data.bounties.slice(0,3).map(bountyCard).join("")}</div>` : `<div class="panel">${empty("No active bounties", "New confirmed bounty pools will appear here when they are placed in game.")}</div>`}</section>
       <section class="section">${sectionHead("Recent Discoveries", "All activity", `${BASE}/activity`)}<div class="panel activity-list">${data.activity?.length ? data.activity.slice(0,5).map(activityRow).join("") : empty("Nothing recorded yet", "Verified player and bounty activity will appear here.")}</div></section>
@@ -202,7 +235,7 @@ async function overviewPage(version) {
 function bountyCard(item) {
   const target = item.target || { username: item.targetUsername || "Unknown player", uuid: item.targetUuid };
   const href = `${BASE}/bounties/${encodeURIComponent(item.id)}`;
-  return `<a data-link class="bounty-card" href="${href}"><div class="bounty-top"><div class="bounty-target">${avatar(target)}<span><span class="bounty-name">${esc(target.username)}</span><span class="bounty-label">WANTED</span></span></div>${pill(item.status || "active")}</div><strong class="reward">${fmt(item.totalValue)}</strong><span class="reward-caption">${esc(item.currency || "Currency unavailable")} reward pool</span><div class="bounty-meta"><span>${fmt(item.contributorCount)} contributors</span><span>${esc(item.expiresAt ? `Ends ${date(item.expiresAt)}` : `Placed ${since(item.createdAt)}`)}</span></div><span class="text-link">Inspect bounty ↗</span></a>`;
+  return `<a data-link class="bounty-card" href="${href}"><div class="bounty-top"><div class="bounty-target">${avatar(target)}<span><span class="bounty-name">${esc(target.username)}</span><span class="bounty-label">WANTED</span></span></div>${pill(item.status || "active")}</div><strong class="reward">${esc(bountyRewardText(item))}</strong><span class="reward-caption">${esc(bountyRewardCaption(item))}</span><div class="bounty-meta"><span>${fmt(item.contributorCount)} contributors</span><span>${esc(item.expiresAt ? `Ends ${date(item.expiresAt)}` : `Placed ${since(item.createdAt)}`)}</span></div><span class="text-link">Inspect bounty ↗</span></a>`;
 }
 
 function activityRow(item) {
@@ -235,7 +268,7 @@ async function playersPage(version, query = {}) {
 }
 function playerRow(player) {
   const status = player.online === true ? `<span class="online-label is-online">Online</span>` : player.online === false ? `<span class="online-label">Offline</span>` : `<span class="online-label">Unavailable</span>`;
-  return `<tr><td><a class="table-player" data-link href="${playerPath(player)}">${avatar(player)}<span>${esc(player.username)}</span></a></td><td>${status}</td><td>${fmt(player.kills)}</td><td>${fmt(player.deaths)}</td><td>${esc(player.kd == null ? ratio(player.kills, player.deaths) : Number(player.kd).toFixed(2))}</td><td>${esc(playtime(player.playtimeSeconds))}</td><td>${fmt(player.bestStreak)}</td><td>${player.activeBountyValue == null || !player.currency ? "—" : `${fmt(player.activeBountyValue)} ${esc(player.currency)}`}</td></tr>`;
+  return `<tr><td><a class="table-player" data-link href="${playerPath(player)}">${avatar(player)}<span>${esc(player.username)}</span></a></td><td>${status}</td><td>${fmt(player.kills)}</td><td>${fmt(player.deaths)}</td><td>${esc(player.kd == null ? ratio(player.kills, player.deaths) : Number(player.kd).toFixed(2))}</td><td>${esc(playtime(player.playtimeSeconds))}</td><td>${fmt(player.bestStreak)}</td><td>${player.activeBountyValue == null ? "—" : bountyItemMaterial({ currency: player.currency, totalValue: player.activeBountyValue }) ? bountyRewardText({ currency: player.currency, totalValue: player.activeBountyValue }) : player.currency ? `${fmt(player.activeBountyValue)} ${esc(player.currency)}` : "—"}</td></tr>`;
 }
 function pagination(data, page) {
   const total = Number(data.total || 0), limit = Number(data.limit || 20), pages = Math.max(1, Math.ceil(total / limit));
@@ -299,19 +332,20 @@ async function bountiesPage(version) {
     const sort = params.get("sort") || "highest_reward";
     const minValue = params.get("minValue") || ""; const nearExpiry = params.get("nearExpiry") || "";
     const transactions = me?.player ? await api("/me/transactions?limit=5").catch(() => ({ items: [] })) : { items: [] };
-    const auth = me?.player ? placementForm(me.player, data.players || [], data.currency || "", data.minimumAmount, data.maximumAmount, transactions.items || []) : `<div class="panel auth-panel"><div class="panel-heading-inline"><div><h2>Place a bounty</h2><p class="subtitle">Link your Minecraft identity in game to request a contribution securely.</p></div><span class="pill">UUID verified in game</span></div><form id="link-form" class="toolbar" style="margin:16px 0 0"><label class="sr-only" for="link-code">One-time link code</label><input class="field" id="link-code" name="code" placeholder="One-time in-game code" autocomplete="one-time-code" maxlength="24" required><button class="button primary" type="submit">Connect account</button></form><p class="stat-note" style="margin-top:11px">In Minecraft, run <code>/bounty link</code> and enter the short-lived code here. Never enter a Microsoft password.</p></div>`;
-    return `${pageHead("MAASTERBOUNTY", "Wanted across the universe.", "Every target has a price. A confirmed bounty pool is paid to one eligible hunter after a verified in-game kill.", `<a class="button" data-link href="${BASE}/bounties/history">Bounty history</a>`)}
-      <section class="section">${auth}</section><section class="section"><div class="toolbar"><label class="sr-only" for="bounty-sort">Sort bounty board</label><select id="bounty-sort" class="select"><option value="highest_reward" ${sort === "highest_reward" ? "selected" : ""}>Highest reward</option><option value="newest" ${sort === "newest" ? "selected" : ""}>Newest</option><option value="oldest" ${sort === "oldest" ? "selected" : ""}>Oldest</option><option value="contributors" ${sort === "contributors" ? "selected" : ""}>Most contributors</option><option value="expiring" ${sort === "expiring" ? "selected" : ""}>Time remaining</option></select><label class="sr-only" for="bounty-min-value">Minimum reward amount</label><input id="bounty-min-value" class="field" style="min-width:145px;width:165px" type="number" min="0" step="1" value="${esc(minValue)}" placeholder="Minimum reward"><label class="sr-only" for="bounty-expiry">Expiry filter</label><select id="bounty-expiry" class="select"><option value="" ${!nearExpiry ? "selected" : ""}>Any expiry</option><option value="24h" ${nearExpiry === "24h" ? "selected" : ""}>Expires within 24h</option><option value="72h" ${nearExpiry === "72h" ? "selected" : ""}>Expires within 72h</option></select><span class="pill">Active · confirmed only</span></div>${items.length ? `<div class="bounty-grid">${items.map(bountyCard).join("")}</div>${pagination(data, Number(data.page || 1))}` : `<div class="panel">${empty("No active bounties", "Confirmed bounty pools will appear here after the Paper server processes them.")}</div>`}</section>`;
+    const auth = me?.player ? placementForm(me.player, data.players || [], data.minimumAmount, data.maximumAmount, transactions.items || []) : `<div class="panel auth-panel"><div class="panel-heading-inline"><div><h2>Place a bounty</h2><p class="subtitle">Link your Minecraft identity in game to place an item bounty securely.</p></div><span class="pill">UUID verified in game</span></div><form id="link-form" class="toolbar" style="margin:16px 0 0"><label class="sr-only" for="link-code">One-time link code</label><input class="field" id="link-code" name="code" placeholder="One-time in-game code" autocomplete="one-time-code" maxlength="24" required><button class="button primary" type="submit">Connect account</button></form><p class="stat-note" style="margin-top:11px">In Minecraft, run <code>/bounty link</code> and enter the short-lived code here. Never enter a Microsoft password.</p></div>`;
+    return `${pageHead("MAASTERBOUNTY", "Wanted across the universe.", "Every target has a price. The item bounty is paid to one eligible hunter after a verified in-game kill.", `<a class="button" data-link href="${BASE}/bounties/history">Bounty history</a>`)}
+      <section class="section">${auth}</section><section class="section"><div class="toolbar"><label class="sr-only" for="bounty-sort">Sort bounty board</label><select id="bounty-sort" class="select"><option value="highest_reward" ${sort === "highest_reward" ? "selected" : ""}>Highest reward</option><option value="newest" ${sort === "newest" ? "selected" : ""}>Newest</option><option value="oldest" ${sort === "oldest" ? "selected" : ""}>Oldest</option><option value="contributors" ${sort === "contributors" ? "selected" : ""}>Most contributors</option><option value="expiring" ${sort === "expiring" ? "selected" : ""}>Time remaining</option></select><label class="sr-only" for="bounty-min-value">Minimum item count</label><input id="bounty-min-value" class="field" style="min-width:145px;width:165px" type="number" min="0" step="1" value="${esc(minValue)}" placeholder="Minimum item count"><label class="sr-only" for="bounty-expiry">Expiry filter</label><select id="bounty-expiry" class="select"><option value="" ${!nearExpiry ? "selected" : ""}>Any expiry</option><option value="24h" ${nearExpiry === "24h" ? "selected" : ""}>Expires within 24h</option><option value="72h" ${nearExpiry === "72h" ? "selected" : ""}>Expires within 72h</option></select><span class="pill">Active · confirmed only</span></div>${items.length ? `<div class="bounty-grid">${items.map(bountyCard).join("")}</div>${pagination(data, Number(data.page || 1))}` : `<div class="panel">${empty("No active bounties", "Confirmed bounty pools will appear here after the Paper server processes them.")}</div>`}</section>`;
   } catch (error) { return `${pageHead("MAASTERBOUNTY", "Wanted across the universe.", "Confirmed bounty pools and contribution history.")}<div class="panel">${errorBox(error)}</div>`; }
 }
 
-function placementForm(me, players, currency, minimum, maximum, transactions) {
+function placementForm(me, players, minimum, maximum, transactions) {
   const pending = transactions.filter((tx) => tx.type === "placement" && ["requested", "processing"].includes(tx.status));
   const latest = transactions[0];
-  const currencyReady = Boolean(currency);
-  return `<div class="panel"><div class="panel-heading-inline"><div><h2>Place a bounty</h2><p class="subtitle">Signed in as ${esc(me.username)}. The Paper server verifies your balance and confirms the charge.</p></div><button class="button ghost" id="logout-button" type="button">Disconnect</button></div>
-    ${pending.length ? `<div class="notice" style="margin-top:14px" role="status">A placement request is ${esc(pending[0].status)}. It will appear on the board only after the server confirms the charge. <a data-link class="text-link" href="${BASE}/bounties/history">View records</a></div>` : latest?.type === "placement" ? `<div class="notice ${latest.status === "completed" ? "success" : latest.status === "failed" ? "error" : ""}" style="margin-top:14px" role="status">Latest placement request: ${esc(latest.status)}${latest.targetUsername ? ` · ${esc(latest.targetUsername)}` : ""}.</div>` : ""}
-    ${!currencyReady ? `<div class="notice" style="margin-top:14px">Bounty requests are disabled until the server owner configures the active economy currency.</div>` : ""}<form id="bounty-form" class="toolbar" data-currency="${esc(currency || "")}" style="margin:16px 0 0"><label class="sr-only" for="bounty-target">Target player</label><select id="bounty-target" class="select" required ${pending.length || !currencyReady ? "disabled" : ""}><option value="">Choose a target…</option>${players.filter((p) => p.uuid !== me.uuid).map((p) => `<option value="${esc(p.uuid)}">${esc(p.username)}</option>`).join("")}</select><label class="sr-only" for="bounty-amount">Contribution amount</label><input id="bounty-amount" class="field" style="min-width:150px;width:170px" type="number" min="${esc(minimum ?? 1)}" max="${esc(maximum ?? "")}" step="1" placeholder="Amount in ${esc(currency || "currency")}" required ${pending.length || !currencyReady ? "disabled" : ""}><button class="button primary" type="submit" ${players.filter((p) => p.uuid !== me.uuid).length && !pending.length && currencyReady ? "" : "disabled"}>Review request</button></form>${currencyReady ? `<p class="stat-note" style="margin-top:10px">Contribution range: ${fmt(minimum)}–${fmt(maximum)} ${esc(currency)}. The server checks your balance before any charge.</p>` : ""}<div id="bounty-result" aria-live="polite" style="margin-top:10px"></div></div>`;
+  const options = [...new Set(COMMON_MINECRAFT_ITEMS)].map((material) => `<option value="${material}"></option>`).join("");
+  const validPlayers = players.filter((p) => p.uuid !== me.uuid);
+  return `<div class="panel"><div class="panel-heading-inline"><div><h2>Place an item bounty</h2><p class="subtitle">Signed in as ${esc(me.username)}. Choose the reward item and quantity; the Paper server verifies and removes the items in game before the bounty is listed.</p></div><button class="button ghost" id="logout-button" type="button">Disconnect</button></div>
+    ${pending.length ? `<div class="notice" style="margin-top:14px" role="status">An item bounty request is ${esc(pending[0].status)}. You must be online in Minecraft with the selected items in your inventory. The bounty appears only after the server confirms the item removal. <a data-link class="text-link" href="${BASE}/bounties/history">View records</a></div>` : latest?.type === "placement" ? `<div class="notice ${latest.status === "completed" ? "success" : latest.status === "failed" ? "error" : ""}" style="margin-top:14px" role="status">Latest placement request: ${esc(latest.status)}${latest.targetUsername ? ` · ${esc(latest.targetUsername)}` : ""}${bountyItemMaterial(latest) ? ` · ${esc(bountyRewardText(latest))}` : ""}.</div>` : ""}
+    <form id="bounty-form" class="toolbar" data-max-items="${MAX_BOUNTY_ITEMS}" style="margin:16px 0 0"><label class="sr-only" for="bounty-target">Target player</label><select id="bounty-target" class="select" required ${pending.length || !validPlayers.length ? "disabled" : ""}><option value="">Choose a target…</option>${validPlayers.map((p) => `<option value="${esc(p.uuid)}">${esc(p.username)}</option>`).join("")}</select><label class="sr-only" for="bounty-item">Reward item</label><input id="bounty-item" class="field" list="minecraft-item-options" style="min-width:170px;width:200px" type="text" maxlength="64" pattern="(?:minecraft:)?[A-Za-z][A-Za-z0-9_]*" placeholder="Item, e.g. DIAMOND" autocomplete="off" required ${pending.length ? "disabled" : ""}><datalist id="minecraft-item-options">${options}</datalist><label class="sr-only" for="bounty-amount">Item quantity</label><input id="bounty-amount" class="field" style="min-width:115px;width:135px" type="number" min="1" max="${MAX_BOUNTY_ITEMS}" step="1" placeholder="Quantity" required ${pending.length ? "disabled" : ""}><button class="button primary" type="submit" ${validPlayers.length && !pending.length ? "" : "disabled"}>Review bounty</button></form><p class="stat-note" style="margin-top:10px">Enter a Minecraft material ID such as <code>DIAMOND</code>, <code>EMERALD</code> or <code>NETHERITE_INGOT</code>. You must be online in Minecraft with enough of that item. Maximum ${MAX_BOUNTY_ITEMS} items per request. A target can have only one active reward item type at a time.</p><div id="bounty-result" aria-live="polite" style="margin-top:10px"></div></div>`;
 }
 
 async function bountyHistoryPage(version) {
@@ -322,7 +356,7 @@ async function bountyHistoryPage(version) {
     const items = data.items || [];
     return `${pageHead("MAASTERBOUNTY", "Bounty history", "Completed, expired, cancelled and under-review records remain part of the public history.", `<a class="button" data-link href="${BASE}/bounties">Active board</a>`)}
       <div class="toolbar"><label class="sr-only" for="history-status">Filter bounty status</label><select class="select" id="history-status"><option value="">All statuses</option>${["claimed", "expired", "cancelled", "under_review"].map((s) => `<option value="${s}" ${status === s ? "selected" : ""}>${s.replaceAll("_", " ")}</option>`).join("")}</select><label class="sr-only" for="history-search">Search target or hunter</label><input id="history-search" class="field" value="${esc(search)}" placeholder="Target or hunter…"><label class="sr-only" for="history-from">Created from</label><input id="history-from" class="select" type="date" value="${esc(from)}"><label class="sr-only" for="history-to">Created through</label><input id="history-to" class="select" type="date" value="${esc(to)}"></div>
-      <div class="table-wrap">${items.length ? `<table><thead><tr><th scope="col">Target</th><th scope="col">Hunter</th><th scope="col">Reward pool</th><th scope="col">Placed</th><th scope="col">Completed</th><th scope="col">Status</th></tr></thead><tbody>${items.map((b) => `<tr><td><a data-link href="${BASE}/bounties/${encodeURIComponent(b.id)}">${esc(b.target?.username || "Unknown")}</a></td><td>${b.hunter ? `<a data-link href="${playerPath(b.hunter)}">${esc(b.hunter.username)}</a>` : "—"}</td><td>${fmt(b.totalValue)} ${esc(b.currency || "Currency unavailable")}</td><td>${esc(dateTime(b.createdAt))}</td><td>${esc(dateTime(b.claimedAt || b.updatedAt))}</td><td>${pill(b.status)}</td></tr>`).join("")}</tbody></table>` : empty("No bounty history yet", "Claimed, expired and cancelled bounties will remain listed here.")}</div>${pagination(data, Number(data.page || 1))}`;
+      <div class="table-wrap">${items.length ? `<table><thead><tr><th scope="col">Target</th><th scope="col">Hunter</th><th scope="col">Reward pool</th><th scope="col">Placed</th><th scope="col">Completed</th><th scope="col">Status</th></tr></thead><tbody>${items.map((b) => `<tr><td><a data-link href="${BASE}/bounties/${encodeURIComponent(b.id)}">${esc(b.target?.username || "Unknown")}</a></td><td>${b.hunter ? `<a data-link href="${playerPath(b.hunter)}">${esc(b.hunter.username)}</a>` : "—"}</td><td>${esc(bountyRewardText(b))}</td><td>${esc(dateTime(b.createdAt))}</td><td>${esc(dateTime(b.claimedAt || b.updatedAt))}</td><td>${pill(b.status)}</td></tr>`).join("")}</tbody></table>` : empty("No bounty history yet", "Claimed, expired and cancelled bounties will remain listed here.")}</div>${pagination(data, Number(data.page || 1))}`;
   } catch (error) { return `${pageHead("MAASTERBOUNTY", "Bounty history", "Confirmed public records.")}<div class="panel">${errorBox(error)}</div>`; }
 }
 
@@ -332,8 +366,8 @@ async function bountyDetailPage(id, version) {
     if (version !== routeVersion) return "";
     const b = data.bounty || data, target = b.target || { username: "Unknown target" };
     return `${pageHead("MAASTERBOUNTY / RECORD", `Bounty on ${target.username || "target"}`, "A public record of the confirmed pool and its contribution history.", `<a class="button" data-link href="${BASE}/bounties">Back to board</a>`)}
-      <div class="detail-grid"><section class="panel"><div class="detail-title">${avatar(target)}<div><h2>${esc(target.username || "Unknown target")}</h2><p class="subtitle">${pill(b.status)} <span style="margin-left:8px">${b.expiresAt ? `Expires ${esc(dateTime(b.expiresAt))}` : "No expiry configured"}</span></p></div></div><span class="amount-large">${fmt(b.totalValue)}</span><p class="subtitle">${esc(b.currency || "Currency unavailable")} reward pool · ${fmt(b.contributorCount)} contributors</p><div class="profile-bio"><div class="key-value"><span>Created</span><strong>${esc(dateTime(b.createdAt))}</strong></div><div class="key-value"><span>Claimed</span><strong>${esc(b.claimedAt ? dateTime(b.claimedAt) : "Not claimed")}</strong></div>${b.hunter ? `<div class="key-value"><span>Hunter</span><strong><a data-link href="${playerPath(b.hunter)}">${esc(b.hunter.username)}</a></strong></div>` : ""}<div class="key-value"><span>Payment</span><strong>${esc(b.paymentStatus || "Unavailable")}</strong></div></div></section>
-      <section class="panel"><h2>Contributions</h2><p class="subtitle">Individual contribution amounts are shown only when the backend marks them public.</p><div class="profile-bio">${data.contributions?.length ? data.contributions.map((c) => `<div class="contribution-row"><a data-link href="${playerPath(c.player || c)}">${esc(c.player?.username || c.username || "Player")}</a><strong>${fmt(c.amount)} ${esc(b.currency || "Currency unavailable")}</strong></div>`).join("") : empty("Contribution details unavailable", "No public contribution records have been returned.")}</div></section></div>`;
+      <div class="detail-grid"><section class="panel"><div class="detail-title">${avatar(target)}<div><h2>${esc(target.username || "Unknown target")}</h2><p class="subtitle">${pill(b.status)} <span style="margin-left:8px">${b.expiresAt ? `Expires ${esc(dateTime(b.expiresAt))}` : "No expiry configured"}</span></p></div></div><span class="amount-large">${esc(bountyRewardText(b))}</span><p class="subtitle">${esc(bountyRewardCaption(b))} · ${fmt(b.contributorCount)} contributors</p><div class="profile-bio"><div class="key-value"><span>Created</span><strong>${esc(dateTime(b.createdAt))}</strong></div><div class="key-value"><span>Claimed</span><strong>${esc(b.claimedAt ? dateTime(b.claimedAt) : "Not claimed")}</strong></div>${b.hunter ? `<div class="key-value"><span>Hunter</span><strong><a data-link href="${playerPath(b.hunter)}">${esc(b.hunter.username)}</a></strong></div>` : ""}<div class="key-value"><span>Reward status</span><strong>${esc(b.paymentStatus || "Unavailable")}</strong></div></div></section>
+      <section class="panel"><h2>Contributions</h2><p class="subtitle">Individual contribution amounts are shown only when the backend marks them public.</p><div class="profile-bio">${data.contributions?.length ? data.contributions.map((c) => `<div class="contribution-row"><a data-link href="${playerPath(c.player || c)}">${esc(c.player?.username || c.username || "Player")}</a><strong>${esc(bountyItemMaterial(b) ? `${fmt(c.amount)} × ${prettyMaterial(bountyItemMaterial(b))}` : `${fmt(c.amount)} ${b.currency || "Currency unavailable"}`)}</strong></div>`).join("") : empty("Contribution details unavailable", "No public contribution records have been returned.")}</div></section></div>`;
   } catch (error) {
     return `${pageHead("MAASTERBOUNTY", error.status === 404 ? "Bounty not found" : "Bounty details", "The backend could not return this record.")}<div class="panel">${error.status === 404 ? empty("No matching bounty", "Return to the board to see active targets.") : errorBox(error)}<a data-link class="button" href="${BASE}/bounties">Bounty board</a></div>`;
   }
@@ -426,29 +460,39 @@ function bindPage(path, version) {
   document.querySelector("#bounty-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const target = document.querySelector("#bounty-target"), amount = document.querySelector("#bounty-amount");
-    if (!target.value || !amount.value || !Number.isSafeInteger(Number(amount.value)) || Number(amount.value) < 1) { toast("Choose a target and enter a whole number amount."); return; }
+    const target = document.querySelector("#bounty-target");
+    const itemInput = document.querySelector("#bounty-item");
+    const amount = document.querySelector("#bounty-amount");
+    const itemMaterial = materialName(itemInput?.value);
+    const itemAmount = Number(amount?.value);
+    if (!target?.value || !itemMaterial || !amount?.value || !Number.isSafeInteger(itemAmount) || itemAmount < 1 || itemAmount > MAX_BOUNTY_ITEMS) {
+      toast(`Choose a target, a valid Minecraft item ID, and a whole-number quantity from 1 to ${MAX_BOUNTY_ITEMS}.`); return;
+    }
     const button = form.querySelector("button[type=submit]");
-    confirmBounty(target.selectedOptions[0].textContent, Number(amount.value), form.dataset.currency || "Currency unavailable", async () => {
+    confirmBounty(target.selectedOptions[0].textContent, itemMaterial, itemAmount, async () => {
       button.disabled = true; transactionInFlight = true;
       let waitForConfirmation = false;
       try {
         const me = await api("/me");
-        const fingerprint = `${target.value}:${Number(amount.value)}`;
+        const fingerprint = `${target.value}:${itemMaterial}:${itemAmount}`;
         if (!placementIdempotencyKey || placementFingerprint !== fingerprint) { placementFingerprint = fingerprint; placementIdempotencyKey = crypto.randomUUID(); }
-        const result = await api("/bounties", { method: "POST", headers: { "X-CSRF-Token": me.csrfToken || "", "Idempotency-Key": placementIdempotencyKey }, body: JSON.stringify({ targetUuid: target.value, amount: Number(amount.value) }) });
+        const result = await api("/bounties", { method: "POST", headers: { "X-CSRF-Token": me.csrfToken || "", "Idempotency-Key": placementIdempotencyKey }, body: JSON.stringify({ targetUuid: target.value, bountyType: "item", itemMaterial, itemType: itemMaterial, itemAmount, item: { material: itemMaterial, amount: itemAmount } }) });
         const status = result.transaction?.status || result.status || "requested";
-        document.querySelector("#bounty-result").innerHTML = `<div class="notice">Request ${esc(result.transaction?.id || "submitted")} is <strong>${esc(status)}</strong>. The amount is not shown as contributed until the Paper server confirms the charge.</div>`;
+        const tx = result.transaction || {};
+        document.querySelector("#bounty-result").innerHTML = `<div class="notice" role="status">Item bounty request ${esc(tx.id || "submitted")} is <strong>${esc(status)}</strong>. ${status === "completed" ? "The item contribution is confirmed." : "Join the Minecraft server with the selected items in your inventory. The bounty will appear after the Paper plugin confirms item removal."}</div>`;
         placementIdempotencyKey = null; placementFingerprint = "";
         if (["requested", "processing"].includes(status)) {
           waitForConfirmation = true;
           form.querySelectorAll("input, select, button[type=submit]").forEach((control) => { control.disabled = true; });
           setTimeout(() => { if (route() === `${BASE}/bounties`) render(); }, 4500);
         }
-        amount.value = ""; toast(status === "completed" ? "Bounty contribution confirmed by the server." : "Request submitted; waiting for server confirmation.");
+        amount.value = ""; itemInput.value = "";
+        toast(status === "completed" ? "Item bounty confirmed by the server." : "Item bounty request submitted; waiting for in-game verification.");
         if (status === "completed") setTimeout(() => render(), 1000);
-      } catch (error) { document.querySelector("#bounty-result").innerHTML = `<div class="notice error">${esc(error.message || "The request was not confirmed.")} Check your bounty history before trying again.</div>`; }
-      finally { transactionInFlight = false; if (!waitForConfirmation) button.disabled = false; }
+      } catch (error) {
+        const suffix = error.code === "currency_unconfigured" ? " The deployed API is still running the old currency-only route; deploy the updated backend before using website item bounties." : " Check your bounty history before trying again.";
+        document.querySelector("#bounty-result").innerHTML = `<div class="notice error" role="status">${esc(error.message || "The item bounty request was not confirmed.")}${esc(suffix)}</div>`;
+      } finally { transactionInFlight = false; if (!waitForConfirmation) button.disabled = false; }
     });
   });
 }
@@ -462,9 +506,9 @@ function setupAutoRefresh() {
   }, 30000);
 }
 
-function confirmBounty(target, amount, currency, onConfirm) {
+function confirmBounty(target, itemMaterial, itemAmount, onConfirm) {
   const node = document.createElement("div"); node.className = "modal-backdrop";
-  node.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><p class="eyebrow">MAASTERBOUNTY</p><h2 id="confirm-title">Review contribution</h2><p>Request <strong>${esc(fmt(amount))} ${esc(currency)}</strong> for a bounty on <strong>${esc(target)}</strong>? The server will validate your balance and target. No contribution is counted until the Paper plugin confirms it.</p><div class="modal-actions"><button class="button" data-cancel type="button">Go back</button><button class="button primary" data-confirm type="button">Submit request</button></div></section>`;
+  node.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><p class="eyebrow">MAASTERBOUNTY</p><h2 id="confirm-title">Review item bounty</h2><p>Submit <strong>${esc(fmt(itemAmount))} × ${esc(prettyMaterial(itemMaterial))}</strong> for a bounty on <strong>${esc(target)}</strong>? The Paper server must verify that you are online and remove the items from your inventory. The bounty is not activated until the server confirms the removal.</p><div class="modal-actions"><button class="button" data-cancel type="button">Go back</button><button class="button primary" data-confirm type="button">Submit request</button></div></section>`;
   document.body.append(node);
   const close = () => node.remove();
   node.querySelector("[data-cancel]").focus();
