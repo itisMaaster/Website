@@ -4,7 +4,7 @@ const app = document.querySelector("#app");
 const NAV = [
   ["Overview", BASE], ["Players", `${BASE}/players`], ["Leaderboards", `${BASE}/leaderboards`],
   ["Bounties", `${BASE}/bounties`], ["Weapons", `${BASE}/weapons`],
-  ["Activity", `${BASE}/activity`], ["Status", `${BASE}/status`]
+  ["Stats", `${BASE}/stats`], ["Chat", `${BASE}/chat`], ["News", `${BASE}/announcements`], ["Activity", `${BASE}/activity`], ["Status", `${BASE}/status`]
 ];
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const MAX_BOUNTY_ITEMS = 2304;
@@ -96,10 +96,16 @@ const playtime = (seconds) => {
 const playerPath = (player) => `${BASE}/player/${encodeURIComponent(player.uuid || player.username || "")}`;
 const activeRoute = (path, current) => current === path || (path !== BASE && current.startsWith(`${path}/`));
 
+function playerSkinHead(player) {
+  const custom = player?.skinUrl || (window.SMP_CONFIG?.skinUrlTemplate && player?.uuid
+    ? window.SMP_CONFIG.skinUrlTemplate.replace("{uuid}", encodeURIComponent(player.uuid)) : "");
+  if (custom) return custom;
+  const uuid = String(player?.uuid || "").replaceAll("-", "");
+  return /^[a-f0-9]{32}$/i.test(uuid) ? `https://crafatar.com/avatars/${uuid}?overlay=true&size=64` : "";
+}
 function avatar(player, sizeClass = "") {
   const name = player?.username || "?";
-  const source = player?.skinUrl || (window.SMP_CONFIG?.skinUrlTemplate && player?.uuid
-    ? window.SMP_CONFIG.skinUrlTemplate.replace("{uuid}", encodeURIComponent(player.uuid)) : "");
+  const source = playerSkinHead(player);
   const img = source ? `<img loading="lazy" alt="" src="${esc(source)}" onload="this.nextElementSibling.hidden=true" onerror="this.remove()">` : "";
   return `<span class="player-avatar ${sizeClass}" aria-label="${esc(name)}">${img}<span aria-hidden="true">${esc(name.slice(0, 2).toUpperCase())}</span></span>`;
 }
@@ -188,6 +194,9 @@ async function render() {
   else if (path.startsWith(`${BASE}/bounties/`)) content = await bountyDetailPage(path.slice(`${BASE}/bounties/`.length), version);
   else if (path === `${BASE}/weapons`) content = await weaponsPage(version);
   else if (path === `${BASE}/activity`) content = await activityPage(version);
+  else if (path === `${BASE}/stats`) content = await statisticsPage(version);
+  else if (path === `${BASE}/chat`) content = await chatPage(version);
+  else if (path === `${BASE}/announcements`) content = await announcementsPage(version);
   else if (path === `${BASE}/status`) content = await statusPage(version);
   else content = `<div class="panel">${empty("Page not found", "Use the navigation to explore the SMP dashboard.")}</div>`;
   if (version !== routeVersion) return;
@@ -207,7 +216,11 @@ function stat(label, value, note = "") {
 
 async function overviewPage(version) {
   try {
-    const data = await api("/overview");
+    const [data, news, chat] = await Promise.all([
+      api("/overview"),
+      api("/announcements?limit=3").catch(() => ({ items: [] })),
+      api("/chat?limit=6").catch(() => ({ items: [] }))
+    ]);
     if (version !== routeVersion) return "";
     const server = data.server || {};
     const ip = server.address || "Server address not configured";
@@ -221,7 +234,7 @@ async function overviewPage(version) {
       const player = data.leaders?.[key];
       return `<div class="panel leader-panel"><p class="section-kicker">${esc(label)}</p>${player ? `<a class="leader-row" data-link href="${playerPath(player)}"><span class="rank top">#1</span>${avatar(player)}<span class="player-name">${esc(player.username)}</span><span class="leader-value">${esc(player[field] == null ? (key === "kd" ? ratio(player.kills, player.deaths) : fmt(player.value)) : key === "kd" ? fmt(player[field]) : compact(player[field]))}</span></a>` : `<div class="empty-inline">${empty("No tracked players", "Verified leaderboard data will appear here.")}</div>`}</div>`;
     }).join("");
-    return `<div class="hero-grid"><section class="hero-copy"><p class="eyebrow">ITSMAASTER SMP</p><h1>The universe is yours.</h1><p class="subtitle">Explore the players. Track the competition. Put a price on a target.</p><div class="hero-actions"><a class="button primary" data-link href="${BASE}/players">Browse players <span aria-hidden="true">↗</span></a><a class="button" data-link href="${BASE}/bounties">View bounties</a></div></section>
+    return `<div class="hero-grid"><section class="hero-copy"><p class="eyebrow">ITSMAASTER SMP</p><h1>Built by the players.</h1><p class="subtitle">Server records, familiar names, hard-earned stats. Everything from the SMP, in one place.</p><div class="hero-actions"><a class="button primary" data-link href="${BASE}/players">Explore players <span aria-hidden="true">↗</span></a><a class="button" data-link href="${BASE}/chat">Open server chat</a></div></section>
       <aside class="server-card" aria-label="Minecraft server connection"><div class="server-top"><div><p class="server-name">${esc(server.name || "itsMaaster SMP")}</p><p class="server-edition">${esc([server.edition, server.version].filter(Boolean).join(" · ") || "Edition and version unavailable")}</p></div>${statusPill(server.status)}</div><div class="server-divider"></div>
       <div class="server-meta"><span>Players online</span><strong>${server.onlinePlayers == null || server.maxPlayers == null ? "Unavailable" : `${fmt(server.onlinePlayers)} / ${fmt(server.maxPlayers)}`}</strong></div>
       <div class="server-meta"><span>Last heartbeat</span><strong>${server.lastHeartbeat ? esc(since(server.lastHeartbeat)) : "Unavailable"}</strong></div>
@@ -229,8 +242,8 @@ async function overviewPage(version) {
       <section class="section"><div class="stats-grid">${stat("Tracked players", stats.players == null ? "—" : compact(stats.players), "Server records")}${stat("Player kills", stats.playerKills == null ? "—" : compact(stats.playerKills), "PvP · all time")}${stat("Active bounties", stats.activeBounties == null ? "—" : compact(stats.activeBounties), "Confirmed · current")}${stat("Bounty pool", data.bounties?.length ? (data.bounties[0].itemMaterial ? `${compact(data.bounties[0].itemAmount ?? data.bounties[0].totalValue)} ${prettyMaterial(data.bounties[0].itemMaterial)}` : stats.currency && stats.activeBountyValue != null ? `${compact(stats.activeBountyValue)} ${stats.currency}` : "Active rewards") : stats.currency && stats.activeBountyValue != null ? `${compact(stats.activeBountyValue)} ${stats.currency}` : "—", "Item rewards shown on the bounty board")}</div></section>
       <section class="section">${sectionHead("The Leaders", "All rankings", `${BASE}/leaderboards`)}<div class="bounty-grid leaders-grid">${leaderMarkup}</div></section>
       <section class="section">${sectionHead("Wanted Across the Universe", "Full bounty board", `${BASE}/bounties`)}${data.bounties?.length ? `<div class="bounty-grid">${data.bounties.slice(0,3).map(bountyCard).join("")}</div>` : `<div class="panel">${empty("No active bounties", "New confirmed bounty pools will appear here when they are placed in game.")}</div>`}</section>
-      <section class="section">${sectionHead("Recent Discoveries", "All activity", `${BASE}/activity`)}<div class="panel activity-list">${data.activity?.length ? data.activity.slice(0,5).map(activityRow).join("") : empty("Nothing recorded yet", "Verified player and bounty activity will appear here.")}</div></section>
-      <section class="section">${sectionHead("Quick access")}<div class="hero-actions"><a class="button" data-link href="${BASE}/players">Players</a><a class="button" data-link href="${BASE}/leaderboards">Leaderboards</a><a class="button" data-link href="${BASE}/bounties">Bounties</a><a class="button" data-link href="${BASE}/weapons">Weapons</a></div></section>`;
+      <section class="section community-grid"><div><div class="section-head"><div><p class="section-kicker">FROM THE SERVER</p><h2 class="section-title">Latest announcements</h2></div><a data-link class="text-link" href="${BASE}/announcements">All announcements ↗</a></div><div class="panel news-preview">${news.items?.length ? news.items.slice(0,2).map(announcementCard).join("") : empty("No announcements yet", "Server news and event notes will show up here.")}</div></div><div><div class="section-head"><div><p class="section-kicker">LIVE FEED</p><h2 class="section-title">Server chat</h2></div><a data-link class="text-link" href="${BASE}/chat">Open chat ↗</a></div><div class="panel chat-preview">${chat.items?.length ? chat.items.slice(-5).map(chatRow).join("") : empty("No chat recorded yet", "Public chat appears once the server bridge is installed.")}</div></div></section>
+      <section class="section">${sectionHead("Quick access")}<div class="hero-actions"><a class="button" data-link href="${BASE}/players">Players</a><a class="button" data-link href="${BASE}/leaderboards">Leaderboards</a><a class="button" data-link href="${BASE}/bounties">Bounties</a><a class="button" data-link href="${BASE}/weapons">Weapons</a><a class="button" data-link href="${BASE}/chat">Chat</a></div></section>`;
   } catch (error) {
     return `${pageHead("ITSMAASTER SMP", "The universe is yours.", "Explore the players. Track the competition. Put a price on a target.")}<div class="panel">${errorBox(error)}<p class="subtitle" style="margin-top:12px">Live server information will appear here after the API and Paper plugin are configured.</p></div>`;
   }
@@ -289,13 +302,16 @@ async function playerPage(identity, version) {
       ["PvP kills", fmt(s.playerKills ?? p.kills)], ["PvP deaths", fmt(s.playerDeaths ?? p.deaths)], ["K/D ratio", s.kd == null ? ratio(s.playerKills ?? p.kills, s.playerDeaths ?? p.deaths) : Number(s.kd).toFixed(2)],
       ["Best killstreak", fmt(s.bestStreak ?? p.bestStreak)], ["Current killstreak", fmt(s.currentStreak ?? p.currentStreak)], ["Playtime", playtime(s.playtimeSeconds ?? p.playtimeSeconds)],
       ["Mob kills", fmt(s.mobKills)], ["Blocks mined", fmt(s.blocksMined)], ["Distance travelled", s.distanceTravelled == null ? "—" : `${fmt(s.distanceTravelled)} blocks`],
-      ["Bounties claimed", fmt(s.bountiesClaimed)], ["Rewards earned", s.bountyRewardsEarned == null ? "—" : s.currency ? `${fmt(s.bountyRewardsEarned)} ${s.currency}` : "Currency unavailable"], ["Bounty value placed", s.bountyValuePlaced == null ? "—" : s.currency ? `${fmt(s.bountyValuePlaced)} ${s.currency}` : "Currency unavailable"]
+      ["Bounties claimed", fmt(s.bountyClaims ?? s.bountiesClaimed)], ["Rewards earned", s.bountyRewardsEarned == null ? "—" : (s.currency?.startsWith?.("ITEM:") ? "Item rewards" : s.currency ? `${fmt(s.bountyRewardsEarned)} ${s.currency}` : "—")], ["Bounty value placed", s.bountyValuePlaced == null ? "—" : (s.currency?.startsWith?.("ITEM:") ? "Item contributions" : s.currency ? `${fmt(s.bountyValuePlaced)} ${s.currency}` : "—")]
     ];
-    return `${pageHead("PLAYER PROFILE", p.username || "Player", "A record built from verified server activity.")}
-      <section class="profile-head">${avatar(p)}<div><div class="profile-name">${esc(p.username || "Unknown player")}</div><div class="profile-meta">${p.online == null ? "Status unavailable" : p.online ? "Online now" : "Offline"}<span>First seen ${esc(date(p.firstSeen))}</span><span>Last active ${esc(p.lastSeen ? since(p.lastSeen) : "Unavailable")}</span>${p.rank ? `<span>Season rank ${esc(p.rank)}</span>` : ""}</div></div></section>
-      <div class="profile-stats">${[["PvP kills", s.playerKills ?? p.kills], ["PvP deaths", s.playerDeaths ?? p.deaths], ["K/D ratio", s.kd == null ? ratio(s.playerKills ?? p.kills, s.playerDeaths ?? p.deaths) : Number(s.kd).toFixed(2)], ["Best streak", s.bestStreak ?? p.bestStreak]].map(([label, value]) => `<div class="profile-stat"><label>${label}</label><strong>${esc(String(value ?? "—"))}</strong></div>`).join("")}</div>
-      <div class="grid-2 section"><section class="panel"><h2>Statistics</h2><p class="subtitle">K/D is PvP kills ÷ PvP deaths. Zero deaths is shown as N/A.</p><div class="profile-bio">${details.map(([label, value]) => `<div class="key-value"><span>${esc(label)}</span><strong>${esc(String(value))}</strong></div>`).join("")}</div></section>
-      <section class="panel"><h2>Recent history</h2><div class="activity-list">${data.history?.length ? data.history.map(activityRow).join("") : empty("No public history yet", "Verified milestones and bounty records will appear here.")}</div>${pagination(data.historyPage || { total: data.historyTotal || 0, limit: 20 }, page)}</section></div>`;
+    const uuidFlat = String(p.uuid || "").replaceAll("-", "");
+    const bodySkin = /^[a-f0-9]{32}$/i.test(uuidFlat) ? `https://crafatar.com/renders/body/${uuidFlat}?overlay=true` : "";
+    const rewards = details.map(([label, value]) => `<div class="key-value"><span>${esc(label)}</span><strong>${esc(String(value))}</strong></div>`).join("");
+    return `${pageHead("PLAYER FILE", p.username || "Player", "Stats from the server, not guesses. Browse the record and recent activity.")}
+      <section class="profile-hero"><div class="profile-skin-stage">${bodySkin ? `<img class="profile-skin-render" src="${esc(bodySkin)}" alt="Minecraft skin of ${esc(p.username || "player")}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.hidden=false"><div class="skin-fallback" hidden>${avatar(p, "skin-fallback-avatar")}</div>` : `<div class="skin-fallback">${avatar(p, "skin-fallback-avatar")}</div>`}<span class="skin-platform">JAVA PLAYER</span></div><div class="profile-identity"><span class="profile-tag">PLAYER PROFILE / ${esc(String(p.uuid || "NO UUID").slice(0,8).toUpperCase())}</span><div class="minecraft-nametag"><span class="nametag-head">${avatar(p)}</span><strong>${esc(p.username || "Unknown player")}</strong><span class="nametag-status ${p.online === true ? "is-online" : ""}">${p.online === true ? "ONLINE" : p.online === false ? "OFFLINE" : "STATUS N/A"}</span></div><p class="profile-description">Tracked since ${esc(date(p.firstSeen))}. Last seen ${esc(p.lastSeen ? since(p.lastSeen) : "at an unknown time")}.</p><div class="profile-meta">${statusPill(p.online === true ? "online" : p.online === false ? "offline" : "unavailable", p.online === true ? "Currently online" : p.online === false ? "Currently offline" : "Status unavailable")}<span>UUID <code>${esc(p.uuid || "Unavailable")}</code></span>${p.rank ? `<span>Season rank ${esc(p.rank)}</span>` : ""}</div><div class="profile-actions"><a class="button primary" data-link href="${BASE}/bounties">View bounties</a><a class="button" data-link href="${BASE}/players">Back to players</a></div></div></section>
+      <div class="profile-stats">${[["PvP kills", s.playerKills ?? p.kills], ["PvP deaths", s.playerDeaths ?? p.deaths], ["K/D ratio", s.kd == null ? ratio(s.playerKills ?? p.kills, s.playerDeaths ?? p.deaths) : Number(s.kd).toFixed(2)], ["Best streak", s.bestStreak ?? p.bestStreak], ["Playtime", playtime(s.playtimeSeconds ?? p.playtimeSeconds)], ["Mob kills", fmt(s.mobKills)], ["Blocks mined", fmt(s.blocksMined)], ["Bounties claimed", fmt(s.bountyClaims ?? s.bountiesClaimed)]].map(([label, value]) => `<div class="profile-stat"><label>${esc(label)}</label><strong>${esc(String(value ?? "—"))}</strong></div>`).join("")}</div>
+      <div class="grid-2 section"><section class="panel"><div class="panel-title-row"><div><p class="section-kicker">ALL-TIME DATA</p><h2>Statistics</h2></div><span class="panel-count">${fmt(s.distanceTravelled)} blocks travelled</span></div><p class="subtitle">K/D is PvP kills divided by PvP deaths. Zero deaths is shown as N/A.</p><div class="profile-bio">${rewards}</div></section>
+      <section class="panel"><div class="panel-title-row"><div><p class="section-kicker">TRACK RECORD</p><h2>Recent history</h2></div><span class="panel-count">${fmt(data.historyPage?.total ?? data.history?.length ?? 0)} records</span></div><div class="activity-list">${data.history?.length ? data.history.map(activityRow).join("") : empty("No public history yet", "Verified milestones and bounty records will appear here.")}</div>${pagination(data.historyPage || { total: data.historyTotal || 0, limit: 20 }, page)}</section></div>`;
   } catch (error) {
     const notFound = error.status === 404;
     return `${pageHead("PLAYER PROFILE", notFound ? "Player not found" : "Player profile", notFound ? "This player is not in the tracked server records." : "A record built from verified server activity.")}<div class="panel">${notFound ? empty("No matching player record", "Check the username or return to the player directory.") : errorBox(error)}<a class="button" data-link href="${BASE}/players">Player directory</a></div>`;
@@ -384,6 +400,50 @@ async function weaponsPage(version) {
     const items = data.items || [];
     return `${pageHead("ARMORY", "Custom weapons", "Weapon names and mechanics are published only when configured by the server owner.")}${items.length ? `<div class="weapon-grid">${items.map((w) => `<article class="weapon-card"><span class="weapon-glyph" aria-hidden="true">⌑</span><h3>${esc(w.name)}</h3><p>${esc(w.description || "No public description configured.")}</p><div class="weapon-data"><span>${esc(w.category || "Category unavailable")}</span><strong>${w.kills == null ? "Stats unavailable" : `${fmt(w.kills)} kills`}</strong></div>${w.cooldownSeconds != null ? `<div class="weapon-data"><span>Cooldown</span><strong>${fmt(w.cooldownSeconds)}s</strong></div>` : ""}</article>`).join("")}</div>` : `<div class="panel">${empty("No weapons configured", "The server owner can publish custom weapon details after confirming their names and mechanics.")}</div>`}`;
   } catch (error) { return `${pageHead("ARMORY", "Custom weapons", "Server-confirmed catalogue and statistics.")}<div class="panel">${errorBox(error)}</div>`; }
+}
+
+async function statisticsPage(version) {
+  try {
+    const data = await api("/overview");
+    if (version !== routeVersion) return "";
+    const t = data.totals || {};
+    const kd = t.playerDeaths ? (Number(t.playerKills || 0) / Number(t.playerDeaths)).toFixed(2) : "N/A";
+    const topLabels = [["kills", "Most PvP kills"], ["playtime", "Most playtime"], ["mobKills", "Most mob kills"], ["bountyClaims", "Most bounty claims"]];
+    const boards = await Promise.all(topLabels.map(async ([category, title]) => {
+      try { const b = await api(`/leaderboards?${qs({category,limit:1,page:1,period:"all_time"})}`); const top = b.items?.[0]; return `<div class="mini-record"><span>${esc(title)}</span>${top ? `<a data-link href="${playerPath(top.player || top)}">${avatar(top.player || top, "small-avatar")}<strong>${esc((top.player || top).username)}</strong></a><b>${esc(top.displayValue ?? fmt(top.value))}</b>` : `<small>No verified record yet</small>`}</div>`; }
+      catch { return `<div class="mini-record"><span>${esc(title)}</span><small>Data unavailable</small></div>`; }
+    }));
+    return `${pageHead("SERVER NUMBERS", "Statistics", "A quick read on the SMP so far. Every number comes from the tracked server records.")}
+      <div class="stats-grid stats-grid-wide">${stat("Tracked players", compact(t.players), "UUID-linked records")}${stat("PvP kills", compact(t.playerKills), "All-time player kills")}${stat("PvP deaths", compact(t.playerDeaths), "All-time player deaths")}${stat("Combined K/D", kd, "Total kills ÷ total deaths")}${stat("Mob kills", compact(t.mobKills), "All tracked players")}${stat("Blocks mined", compact(t.blocksMined), "All tracked players")}${stat("Playtime", playtime(t.playtimeSeconds), "Combined tracked playtime")}${stat("Bounties claimed", compact(t.bountyClaims), "Confirmed claims")}</div>
+      <section class="section"><div class="section-head"><div><p class="section-kicker">CURRENT RECORD HOLDERS</p><h2 class="section-title">Top records</h2></div><a data-link class="text-link" href="${BASE}/leaderboards">All leaderboards ↗</a></div><div class="record-grid">${boards.join("")}</div></section>
+      <section class="panel section"><p class="section-kicker">HOW IT WORKS</p><h2>Server-verified data</h2><p class="subtitle">Statistics are updated by the Paper plugin. If a field shows a dash or a record is missing, the server has not reported enough verified data for it yet.</p></section>`;
+  } catch (error) { return `${pageHead("SERVER NUMBERS", "Statistics", "A quick read on the SMP so far.")}<div class="panel">${errorBox(error)}</div>`; }
+}
+
+function announcementCard(item) {
+  return `<article class="announcement-card ${item.pinned ? "is-pinned" : ""}"><div class="announcement-meta"><span>${item.pinned ? "PINNED" : "SERVER NEWS"}</span><time datetime="${esc(item.createdAt || "")}">${esc(dateTime(item.createdAt))}</time></div><h3>${esc(item.title || "Announcement")}</h3><p>${esc(item.body || "")}</p></article>`;
+}
+function chatRow(item) {
+  const name = item.username || item.playerUsername || "Unknown";
+  const isAdmin = item.source === "admin" || item.source === "website";
+  return `<div class="chat-line ${isAdmin ? "chat-line-admin" : ""}"><time datetime="${esc(item.createdAt || "")}">${esc(item.createdAt ? new Intl.DateTimeFormat(undefined,{hour:"2-digit",minute:"2-digit"}).format(new Date(item.createdAt)) : "--:--")}</time><span class="chat-name ${isAdmin ? "chat-name-admin" : ""}">${esc(name)}</span><span class="chat-message">${esc(item.message || "")}</span></div>`;
+}
+async function announcementsPage(version) {
+  try {
+    const data = await api("/announcements?limit=50");
+    if (version !== routeVersion) return "";
+    return `${pageHead("SERVER NEWS", "Announcements", "Notes from the server, posted by the owner.")}
+      <div class="news-layout"><div class="news-list">${data.items?.length ? data.items.map(announcementCard).join("") : `<div class="panel">${empty("Nothing announced yet", "When something is happening on the SMP, you will find it here.")}</div>`}</div><aside class="panel news-side"><p class="section-kicker">ITSMAASTER SMP</p><h2>Stay in the loop.</h2><p>New features, maintenance notes and event information will appear here.</p><a class="button" data-link href="${BASE}">Back to overview</a></aside></div>`;
+  } catch (error) { return `${pageHead("SERVER NEWS", "Announcements", "Notes from the server, posted by the owner.")}<div class="panel">${errorBox(error)}</div>`; }
+}
+async function chatPage(version) {
+  try {
+    const data = await api("/chat?limit=100");
+    if (version !== routeVersion) return "";
+    const rows = data.items || [];
+    return `${pageHead("GLOBAL CHAT", "Server chat", "A read-only mirror of public Minecraft chat. Messages are shown after the server bridge receives them.", `<span class="live-label"><i></i> PUBLIC FEED</span>`)}
+      <section class="chat-shell panel"><div class="chat-toolbar"><div><strong>itsMaaster SMP</strong><span>Global chat · latest ${fmt(rows.length)} messages</span></div><span class="chat-refresh">Refreshes every few seconds</span></div><div class="chat-feed" id="chat-feed">${rows.length ? rows.map(chatRow).join("") : empty("No messages yet", "Chat will appear here after the Maaster SMP Bridge plugin is installed and configured.")}</div><div class="chat-footnote">Only public server chat is mirrored here. Do not share personal or private information in global chat.</div></section>`;
+  } catch (error) { return `${pageHead("GLOBAL CHAT", "Server chat", "A read-only mirror of public Minecraft chat.")}<div class="panel">${errorBox(error)}</div>`; }
 }
 
 async function activityPage(version) {
@@ -503,11 +563,12 @@ function bindPage(path, version) {
 
 function setupAutoRefresh() {
   clearInterval(refreshTimer);
+  const interval = route() === `${BASE}/chat` ? 5000 : route() === `${BASE}/announcements` ? 30000 : 45000;
   refreshTimer = setInterval(() => {
     const active = document.activeElement;
     if (transactionInFlight || document.visibilityState !== "visible" || document.querySelector(".modal-backdrop") || (active && active.matches("input, select, textarea, button"))) return;
     render();
-  }, 30000);
+  }, interval);
 }
 
 function confirmBounty(target, itemMaterial, itemAmount, onConfirm) {
