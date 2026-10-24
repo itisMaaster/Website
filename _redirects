@@ -1,3 +1,4 @@
+# SMP client-side routes
 /smp/player/* /smp/index.html 200
 /smp/players /smp/index.html 200
 /smp/leaderboards /smp/index.html 200
@@ -9,4 +10,7 @@
 /smp/announcements /smp/index.html 200
 /smp/activity /smp/index.html 200
 /smp/status /smp/index.html 200
-/smpadmin /smpadmin/index.html 200
+# Explicit admin rewrite. Flat file also remains directly reachable at /smpadmin.html.
+/smpadmin /smpadmin.html 200
+/smpadmin/ /smpadmin.html 200
+/smpadmin/* /smpadmin.html 200
