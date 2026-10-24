@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0c0a">
+  <meta name="robots" content="noindex, nofollow">
+  <title>itsMaaster SMP · Admin</title>
+  <link rel="stylesheet" href="/smpadmin/styles.css">
+  <script src="/smp/config.js"></script>
+  <script type="module" src="/smpadmin/app.js"></script>
+</head>
+<body>
+  <header class="admin-topbar">
+    <a class="brand" href="/smp"><span class="brand-mark">M</span><span>itsMaaster <small>SMP CONTROL ROOM</small></span></a>
+    <a href="/smp" class="back-link">← Back to public site</a>
+  </header>
+  <main id="admin-app" class="admin-container">
+    <section class="login-card">
+      <p class="eyebrow">RESTRICTED ACCESS</p><h1>Server control room</h1>
+      <p class="muted">Sign in with the admin secret configured on the API. The secret is not stored in this site’s source code.</p>
+      <form id="login-form">
+        <label for="admin-code">Admin access code</label>
+        <input id="admin-code" name="code" type="password" autocomplete="current-password" spellcheck="false" required>
+        <button class="button primary" type="submit">Unlock control room</button>
+        <p id="login-error" class="feedback" role="status"></p>
+      </form>
+      <p class="fineprint">Use HTTPS. Don’t share this code or paste it into public chat.</p>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

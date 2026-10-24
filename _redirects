@@ -1,0 +1,12 @@
+/smp/player/* /smp/index.html 200
+/smp/players /smp/index.html 200
+/smp/leaderboards /smp/index.html 200
+/smp/stats /smp/index.html 200
+/smp/bounties /smp/index.html 200
+/smp/bounties/* /smp/index.html 200
+/smp/weapons /smp/index.html 200
+/smp/chat /smp/index.html 200
+/smp/announcements /smp/index.html 200
+/smp/activity /smp/index.html 200
+/smp/status /smp/index.html 200
+/smpadmin /smpadmin/index.html 200
