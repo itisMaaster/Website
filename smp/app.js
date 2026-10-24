@@ -1,4 +1,4 @@
-const API = String(window.SMP_CONFIG?.apiBase || "/api/v1").replace(/\/$/, "");
+const API = "https://api.itsmaaster.xyz/api/v1";
 const BASE = "/smp";
 const app = document.querySelector("#app");
 const NAV = [
