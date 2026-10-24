@@ -1,4 +1,9 @@
-const API = "https://api.itsmaaster.xyz/api/v1";
+const configuredApiBase = String(window.SMP_CONFIG?.apiBase || "").trim();
+const API = (() => {
+  if (!/^https?:\/\//i.test(configuredApiBase)) return "https://api.itsmaaster.xyz/api/v1";
+  const base = configuredApiBase.replace(/\/+$/, "");
+  return /\/api\/v1$/i.test(base) ? base : `${base}/api/v1`;
+})();
 const BASE = "/smp";
 const app = document.querySelector("#app");
 const NAV = [
@@ -64,6 +69,33 @@ async function api(path, options = {}) {
   try { body = await response.json(); } catch { /* Non-JSON error is handled below. */ }
   if (!response.ok) throw new ApiError(body.error?.message || body.message || `Request failed (${response.status})`, response.status, body.error?.code || "");
   return body;
+}
+
+let MINECRAFT_ITEM_CATALOG = [...new Set(COMMON_MINECRAFT_ITEMS)];
+let minecraftCatalogReady = false;
+let minecraftCatalogFetchedAt = 0;
+let minecraftCatalogPromise = null;
+async function loadMinecraftItemCatalog(force = false) {
+  if (!force && minecraftCatalogReady && Date.now() - minecraftCatalogFetchedAt < 5 * 60_000) return MINECRAFT_ITEM_CATALOG;
+  if (!force && minecraftCatalogPromise) return minecraftCatalogPromise;
+  minecraftCatalogPromise = api("/materials?limit=3000").then(data => {
+    const received = (data.items || []).map(entry => materialName(typeof entry === "string" ? entry : entry.material)).filter(Boolean);
+    if (received.length) {
+      MINECRAFT_ITEM_CATALOG = [...new Set(received)].sort((a, b) => a.localeCompare(b));
+      minecraftCatalogReady = true;
+      minecraftCatalogFetchedAt = Date.now();
+    }
+    return MINECRAFT_ITEM_CATALOG;
+  }).catch(() => MINECRAFT_ITEM_CATALOG).finally(() => { minecraftCatalogPromise = null; });
+  return minecraftCatalogPromise;
+}
+function minecraftItemOptions(query = "", selected = "") {
+  const normalizedQuery = String(query || "").trim().toLowerCase().replace(/^minecraft:/, "");
+  let items = MINECRAFT_ITEM_CATALOG;
+  if (normalizedQuery) items = items.filter(material => material.toLowerCase().includes(normalizedQuery) || prettyMaterial(material).toLowerCase().includes(normalizedQuery));
+  if (selected && !items.includes(selected) && MINECRAFT_ITEM_CATALOG.includes(selected)) items = [selected, ...items];
+  const options = items.map(material => `<option value="${esc(material)}" ${material === selected ? "selected" : ""}>${esc(prettyMaterial(material))} · ${esc(material)}</option>`).join("");
+  return `<option value="">Choose an item…</option>${options}`;
 }
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -345,6 +377,7 @@ function leaderboardValue(category, item) {
 
 async function bountiesPage(version) {
   try {
+    await loadMinecraftItemCatalog();
     const params = new URLSearchParams(location.search);
     const [data, me] = await Promise.all([api(`/bounties?${qs({ sort: params.get("sort") || "highest_reward", minValue: params.get("minValue") || "", nearExpiry: params.get("nearExpiry") || "", page: params.get("page") || 1, limit: 24 })}`), api("/me").catch(() => null)]);
     if (version !== routeVersion) return "";
@@ -361,11 +394,12 @@ async function bountiesPage(version) {
 function placementForm(me, players, minimum, maximum, transactions) {
   const pending = transactions.filter((tx) => tx.type === "placement" && ["requested", "processing"].includes(tx.status));
   const latest = transactions[0];
-  const options = [...new Set(COMMON_MINECRAFT_ITEMS)].map((material) => `<option value="${material}"></option>`).join("");
+  const options = minecraftItemOptions();
   const validPlayers = players.filter((p) => p.uuid !== me.uuid);
   return `<div class="panel"><div class="panel-heading-inline"><div><h2>Place an item bounty</h2><p class="subtitle">Signed in as ${esc(me.username)}. Choose the reward item and quantity; the Paper server verifies and removes the items in game before the bounty is listed.</p></div><button class="button ghost" id="logout-button" type="button">Disconnect</button></div>
     ${pending.length ? `<div class="notice" style="margin-top:14px" role="status">An item bounty request is ${esc(pending[0].status)}. You must be online in Minecraft with the selected items in your inventory. The bounty appears only after the server confirms the item removal. <a data-link class="text-link" href="${BASE}/bounties/history">View records</a></div>` : latest?.type === "placement" ? `<div class="notice ${latest.status === "completed" ? "success" : latest.status === "failed" ? "error" : ""}" style="margin-top:14px" role="status">Latest placement request: ${esc(latest.status)}${latest.targetUsername ? ` · ${esc(latest.targetUsername)}` : ""}${bountyItemMaterial(latest) ? ` · ${esc(bountyRewardText(latest))}` : ""}.</div>` : ""}
-    <form id="bounty-form" class="toolbar" data-max-items="${MAX_BOUNTY_ITEMS}" style="margin:16px 0 0"><label class="sr-only" for="bounty-target">Target player</label><select id="bounty-target" class="select" required ${pending.length || !validPlayers.length ? "disabled" : ""}><option value="">Choose a target…</option>${validPlayers.map((p) => `<option value="${esc(p.uuid)}">${esc(p.username)}</option>`).join("")}</select><label class="sr-only" for="bounty-item">Reward item</label><input id="bounty-item" class="field" list="minecraft-item-options" style="min-width:170px;width:200px" type="text" maxlength="64" pattern="(?:minecraft:)?[A-Za-z][A-Za-z0-9_]*" placeholder="Item, e.g. DIAMOND" autocomplete="off" required ${pending.length ? "disabled" : ""}><datalist id="minecraft-item-options">${options}</datalist><label class="sr-only" for="bounty-amount">Item quantity</label><input id="bounty-amount" class="field" style="min-width:115px;width:135px" type="number" min="1" max="${MAX_BOUNTY_ITEMS}" step="1" placeholder="Quantity" required ${pending.length ? "disabled" : ""}><button class="button primary" type="submit" ${validPlayers.length && !pending.length ? "" : "disabled"}>Review bounty</button></form><p class="stat-note" style="margin-top:10px">Enter a Minecraft material ID such as <code>DIAMOND</code>, <code>EMERALD</code> or <code>NETHERITE_INGOT</code>. You must be online in Minecraft with enough of that item. Maximum ${MAX_BOUNTY_ITEMS} items per request. A target can have only one active reward item type at a time.</p><div id="bounty-result" aria-live="polite" style="margin-top:10px"></div></div>`;
+    ${minecraftCatalogReady ? `<div class="notice" style="margin-top:14px">Full item catalog loaded: ${fmt(MINECRAFT_ITEM_CATALOG.length)} materials supported by this server.</div>` : `<div class="notice" style="margin-top:14px">The full Minecraft item catalog is not synced yet. The server owner needs to update the bridge before all item types can be used.</div>`}
+    <form id="bounty-form" class="toolbar" data-max-items="${MAX_BOUNTY_ITEMS}" style="margin:16px 0 0"><label class="sr-only" for="bounty-target">Target player</label><select id="bounty-target" class="select" required ${pending.length || !validPlayers.length ? "disabled" : ""}><option value="">Choose a target…</option>${validPlayers.map((p) => `<option value="${esc(p.uuid)}">${esc(p.username)}</option>`).join("")}</select><label class="sr-only" for="bounty-item-search">Search all Minecraft items</label><input id="bounty-item-search" class="field" style="min-width:170px;width:220px" type="search" placeholder="Search all items…" autocomplete="off" ${pending.length ? "disabled" : ""}><label class="sr-only" for="bounty-item">Reward item</label><select id="bounty-item" class="select" style="min-width:220px;width:280px;max-width:100%" required ${pending.length ? "disabled" : ""}>${options}</select><label class="sr-only" for="bounty-amount">Item quantity</label><input id="bounty-amount" class="field" style="min-width:115px;width:135px" type="number" min="1" max="${MAX_BOUNTY_ITEMS}" step="1" placeholder="Quantity" required ${pending.length ? "disabled" : ""}><button class="button primary" type="submit" ${validPlayers.length && !pending.length ? "" : "disabled"}>Review bounty</button></form><p class="stat-note" style="margin-top:10px">Search and select from every item material sent by Paper 1.21.11. Your linked account must have enough items in its latest saved inventory snapshot, even if you are offline. If you are offline, the request waits until you next join and the server actually removes the items. The bounty is not activated before that confirmation. Maximum ${MAX_BOUNTY_ITEMS} items per request. A target can have only one active reward item type at a time.</p><div id="bounty-result" aria-live="polite" style="margin-top:10px"></div></div>`;
 }
 
 async function bountyHistoryPage(version) {
@@ -522,6 +556,18 @@ function bindPage(path, version) {
     try { const me = await api("/me"); await api("/auth/logout", { method: "POST", headers: { "X-CSRF-Token": me.csrfToken || "" }, body: "{}" }); toast("Account disconnected."); render(); }
     catch (error) { toast(error.message || "Could not disconnect account."); }
   });
+  const itemSearch = document.querySelector("#bounty-item-search");
+  const itemSelect = document.querySelector("#bounty-item");
+  itemSearch?.addEventListener("input", () => {
+    const previous = itemSelect?.value || "";
+    if (itemSelect) itemSelect.innerHTML = minecraftItemOptions(itemSearch.value, previous);
+  });
+  itemSelect?.addEventListener("change", () => {
+    if (itemSearch && itemSelect.value) {
+      itemSearch.value = "";
+      itemSelect.innerHTML = minecraftItemOptions("", itemSelect.value);
+    }
+  });
   document.querySelector("#bounty-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -544,7 +590,7 @@ function bindPage(path, version) {
         const result = await api("/bounties", { method: "POST", headers: { "X-CSRF-Token": me.csrfToken || "", "Idempotency-Key": placementIdempotencyKey }, body: JSON.stringify({ targetUuid: target.value, bountyType: "item", itemMaterial, itemType: itemMaterial, itemAmount, item: { material: itemMaterial, amount: itemAmount } }) });
         const status = result.transaction?.status || result.status || "requested";
         const tx = result.transaction || {};
-        document.querySelector("#bounty-result").innerHTML = `<div class="notice" role="status">Item bounty request ${esc(tx.id || "submitted")} is <strong>${esc(status)}</strong>. ${status === "completed" ? "The item contribution is confirmed." : "Join the Minecraft server with the selected items in your inventory. The bounty will appear after the Paper plugin confirms item removal."}</div>`;
+        document.querySelector("#bounty-result").innerHTML = `<div class="notice" role="status">Item bounty request ${esc(tx.id || "submitted")} is <strong>${esc(status)}</strong>. ${status === "completed" ? "The item contribution is confirmed." : "Your saved inventory snapshot was checked. If you are offline, this request waits until you join; the bounty appears only after Paper confirms the actual item removal."}</div>`;
         placementIdempotencyKey = null; placementFingerprint = "";
         if (["requested", "processing"].includes(status)) {
           waitForConfirmation = true;
@@ -555,7 +601,15 @@ function bindPage(path, version) {
         toast(status === "completed" ? "Item bounty confirmed by the server." : "Item bounty request submitted; waiting for in-game verification.");
         if (status === "completed") setTimeout(() => render(), 1000);
       } catch (error) {
-        const suffix = error.code === "currency_unconfigured" ? " The deployed API is still running the old currency-only route; deploy the updated backend before using website item bounties." : " Check your bounty history before trying again.";
+        const suffixes = {
+          currency_unconfigured: " The deployed API is still running the old currency-only route; deploy the updated backend before using website item bounties.",
+          authentication_required: " Link your Minecraft account on this website first.",
+          inventory_snapshot_missing: " Join the SMP once after the bridge update so the API can save your inventory; after that you can submit while offline.",
+          item_catalog_not_ready: " The full item list has not synced from Paper yet. Check the bridge startup log and try again.",
+          insufficient_item_inventory: " No bounty was activated. The selected quantity exceeds the saved inventory balance, after pending requests.",
+          bounties_paused: " The server admin has paused new website bounty placements."
+        };
+        const suffix = suffixes[error.code] || " Check your bounty history before trying again.";
         document.querySelector("#bounty-result").innerHTML = `<div class="notice error" role="status">${esc(error.message || "The item bounty request was not confirmed.")}${esc(suffix)}</div>`;
       } finally { transactionInFlight = false; if (!waitForConfirmation) button.disabled = false; }
     });
@@ -574,7 +628,7 @@ function setupAutoRefresh() {
 
 function confirmBounty(target, itemMaterial, itemAmount, onConfirm) {
   const node = document.createElement("div"); node.className = "modal-backdrop";
-  node.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><p class="eyebrow">MAASTERBOUNTY</p><h2 id="confirm-title">Review item bounty</h2><p>Submit <strong>${esc(fmt(itemAmount))} × ${esc(prettyMaterial(itemMaterial))}</strong> for a bounty on <strong>${esc(target)}</strong>? The Paper server must verify that you are online and remove the items from your inventory. The bounty is not activated until the server confirms the removal.</p><div class="modal-actions"><button class="button" data-cancel type="button">Go back</button><button class="button primary" data-confirm type="button">Submit request</button></div></section>`;
+  node.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><p class="eyebrow">MAASTERBOUNTY</p><h2 id="confirm-title">Review item bounty</h2><p>Submit <strong>${esc(fmt(itemAmount))} × ${esc(prettyMaterial(itemMaterial))}</strong> for a bounty on <strong>${esc(target)}</strong>? The API checks your latest saved inventory snapshot even when you are offline. The bounty only activates after the Paper server verifies and removes the real items; if you are offline, it will wait until you join.</p><div class="modal-actions"><button class="button" data-cancel type="button">Go back</button><button class="button primary" data-confirm type="button">Submit request</button></div></section>`;
   document.body.append(node);
   const close = () => node.remove();
   node.querySelector("[data-cancel]").focus();
