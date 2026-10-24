@@ -45,6 +45,10 @@ let toastTimer;
 let restoreSearchCursor = null;
 let refreshTimer;
 let transactionInFlight = false;
+// Keep an idempotency key for the current bounty submission only.
+// This allows safe retries without creating duplicate requests.
+let placementIdempotencyKey = null;
+let placementFingerprint = "";
 
 class ApiError extends Error {
   constructor(message, status = 0, code = "") { super(message); this.status = status; this.code = code; }
