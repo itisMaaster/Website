@@ -441,8 +441,9 @@ async function chatPage(version) {
     const data = await api("/chat?limit=100");
     if (version !== routeVersion) return "";
     const rows = data.items || [];
+    const mirrorNotice = data.mirrorChatEnabled === false ? `<div class="notice" style="margin-bottom:12px">Public chat mirroring is currently paused by the server owner. New Minecraft messages will not appear until it is enabled again.</div>` : "";
     return `${pageHead("GLOBAL CHAT", "Server chat", "A read-only mirror of public Minecraft chat. Messages are shown after the server bridge receives them.", `<span class="live-label"><i></i> PUBLIC FEED</span>`)}
-      <section class="chat-shell panel"><div class="chat-toolbar"><div><strong>itsMaaster SMP</strong><span>Global chat · latest ${fmt(rows.length)} messages</span></div><span class="chat-refresh">Refreshes every few seconds</span></div><div class="chat-feed" id="chat-feed">${rows.length ? rows.map(chatRow).join("") : empty("No messages yet", "Chat will appear here after the Maaster SMP Bridge plugin is installed and configured.")}</div><div class="chat-footnote">Only public server chat is mirrored here. Do not share personal or private information in global chat.</div></section>`;
+      ${mirrorNotice}<section class="chat-shell panel"><div class="chat-toolbar"><div><strong>itsMaaster SMP</strong><span>Global chat · latest ${fmt(rows.length)} messages</span></div><span class="chat-refresh">Refreshes every few seconds</span></div><div class="chat-feed" id="chat-feed">${rows.length ? rows.map(chatRow).join("") : empty("No messages yet", data.mirrorChatEnabled === false ? "Mirroring is paused." : "Chat will appear here after the Maaster SMP Bridge plugin is installed, configured and connected to the API.")}</div><div class="chat-footnote">Only public server chat is mirrored here. Do not share personal or private information in global chat.</div></section>`;
   } catch (error) { return `${pageHead("GLOBAL CHAT", "Server chat", "A read-only mirror of public Minecraft chat.")}<div class="panel">${errorBox(error)}</div>`; }
 }
 
