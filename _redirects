@@ -1,16 +1,12 @@
 # SMP client-side routes
-/smp/player/* /smp/index.html 200
-/smp/players /smp/index.html 200
-/smp/leaderboards /smp/index.html 200
-/smp/stats /smp/index.html 200
-/smp/bounties /smp/index.html 200
-/smp/bounties/* /smp/index.html 200
-/smp/weapons /smp/index.html 200
-/smp/chat /smp/index.html 200
-/smp/announcements /smp/index.html 200
-/smp/activity /smp/index.html 200
-/smp/status /smp/index.html 200
-# Explicit admin rewrite. Flat file also remains directly reachable at /smpadmin.html.
-/smpadmin /smpadmin.html 200
-/smpadmin/ /smpadmin.html 200
-/smpadmin/* /smpadmin.html 200
+/smp/player/* /smp/ 200
+/smp/players /smp/ 200
+/smp/leaderboards /smp/ 200
+/smp/stats /smp/ 200
+/smp/bounties /smp/ 200
+/smp/bounties/* /smp/ 200
+/smp/weapons /smp/ 200
+/smp/chat /smp/ 200
+/smp/announcements /smp/ 200
+/smp/activity /smp/ 200
+/smp/status /smp/ 200
